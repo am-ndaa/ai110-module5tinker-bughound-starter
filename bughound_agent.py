@@ -16,9 +16,10 @@ class BugHoundAgent:
     5) REFLECT: decide whether to apply the fix automatically
     """
 
-    def __init__(self, client: Optional[Any] = None):
+    def __init__(self, client: Optional[Any] = None, strict_mode: bool = False):
         # client should implement: complete(system_prompt: str, user_prompt: str) -> str
         self.client = client
+        self.strict_mode = strict_mode
         self.logs: List[Dict[str, str]] = []
 
     # ----------------------------
@@ -173,17 +174,25 @@ class BugHoundAgent:
     # ----------------------------
     def _parse_json_array_of_issues(self, text: str) -> Optional[List[Dict[str, str]]]:
         text = text.strip()
-        parsed = self._try_json_loads(text)
-        if isinstance(parsed, list):
-            return self._normalize_issues(parsed)
+        if self.strict_mode:
+            # Strict mode: require perfect JSON array
+            parsed = self._try_json_loads(text)
+            if isinstance(parsed, list):
+                return self._normalize_issues(parsed)
+            return None
+        else:
+            # Lenient mode: allow extraction from partial text
+            parsed = self._try_json_loads(text)
+            if isinstance(parsed, list):
+                return self._normalize_issues(parsed)
 
-        array_str = self._extract_first_json_array(text)
-        if array_str:
-            parsed2 = self._try_json_loads(array_str)
-            if isinstance(parsed2, list):
-                return self._normalize_issues(parsed2)
+            array_str = self._extract_first_json_array(text)
+            if array_str:
+                parsed2 = self._try_json_loads(array_str)
+                if isinstance(parsed2, list):
+                    return self._normalize_issues(parsed2)
 
-        return None
+            return None
 
     def _normalize_issues(self, arr: List[Any]) -> List[Dict[str, str]]:
         issues: List[Dict[str, str]] = []
